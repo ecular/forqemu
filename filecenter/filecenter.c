@@ -14,9 +14,25 @@
 #define BUFFER_SIZE 1024
 #define MAX_THREAD_NUM 100
 
+typedef struct{
+    char *name;
+    int n;
+}LIST;
+
 int thread_count = 0;
 pthread_t threads[MAX_THREAD_NUM];
+LIST name_list[MAX_THREAD_NUM + 1];
 
+int find_socket(LIST *list,char *name)
+{
+    int i;
+    for(i=1;i<=list[0].n;i++)
+    {
+        if(strcmp(list[i].name,name)==0)
+            return list[i].n;
+    }
+    return -1;
+}
 /**
  * 接收数据的执行函数
  * @param conn_socket
@@ -65,6 +81,7 @@ int get_private(char *vmname)
  */
 int main(int argc, char** argv)
 {
+    name_list[0].n=0;
     // 建立Socket
     int server_socket = socket(PF_INET, SOCK_STREAM, 0);
     if (server_socket < 0) {
@@ -138,11 +155,21 @@ void recv_data(void *conn_socket)
     int length = 0;
     while((length = recv((int)conn_socket, buffer, BUFFER_SIZE, 0)) >= 0)
     {
-        printf("loop!\n");
         if (length == 0)
         {
             printf("Thread Exit\n");
             return;
+        }
+
+        if(buffer[0] == '*' && buffer[1] == '#')//*# vmaname
+        {
+            
+            name_list[name_list[0].n + 1].n=(int)conn_socket;
+            name_list[name_list[0].n + 1].name = (char *)malloc(strlen(buffer));
+            strcpy(name_list[name_list[0].n + 1].name,buffer+3);
+            name_list[0].n=name_list[0].n+1;
+            printf("reveice notify:%s ,name =%s\n ",buffer,name_list[name_list[0].n].name);
+            fflush(stdout);
         }
 
         if(strstr(buffer,"applay") != NULL)
@@ -179,6 +206,19 @@ void recv_data(void *conn_socket)
         if(strstr(buffer,"finishcopy") != NULL)
         {
             printf("%s\n",buffer);
+            int des_port = find_socket(name_list,strstr(buffer,"finishcopy")+11);
+            if(des_port > 0)
+            {
+                int flag  = write((int)des_port,"TO",2);
+                printf("send to %s %d\n",strstr(buffer,"finishcopy")+11,flag);
+                fflush(stdout);
+            }
+            else
+            {
+                printf("cant find des_port.");
+                fflush(stdout);
+            }
+
             fflush(stdout);
             strcat(cmd1,"virsh qemu-monitor-command");
             strcat(cmd1,strstr(buffer,"finishcopy")+10);
