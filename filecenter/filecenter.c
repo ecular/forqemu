@@ -181,6 +181,7 @@ void recv_data(void *conn_socket)
             strcat(vmname_to,strstr(buffer,"applay ")+7);
             if(get_private(vmname_from) != 0 && get_private(vmname_to) != 0 && get_private(vmname_from) > get_private(vmname_to))//allow operate(can green --> red)
             {
+                printf("judgement result:YES\n");
                 write((int)conn_socket,"OK",2);
                 strcat(cmd1,"virsh qemu-monitor-command ");
                 memcpy(cmd1+27,buffer,strchr(buffer,' ')+1-buffer);
@@ -198,6 +199,7 @@ void recv_data(void *conn_socket)
             }
             else
             {
+                printf("judgement result:NO\n");
                 write((int)conn_socket,"NO",2);
                 memset(buffer,0,BUFFER_SIZE);
             }
