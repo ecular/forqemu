@@ -1,0 +1,26 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.9~svn20110310	//
+BUFFER_SIZE	./filecenter.c	16;"	d	file:
+LIST	./filecenter.c	/^}LIST;$/;"	t	typeref:struct:__anon1	file:
+LISTEN_QUEUE_LENGTH	./filecenter.c	15;"	d	file:
+MAX_THREAD_NUM	./filecenter.c	17;"	d	file:
+SERVER_PORT	./filecenter.c	14;"	d	file:
+add_vmname	./filecenter.c	/^int add_vmname(char *vmname,int conn_socket)$/;"	f
+broadcast_add	./filecenter.c	/^int broadcast_add(char *vmname)$/;"	f
+broadcast_del	./filecenter.c	/^int broadcast_del(char *vmname)$/;"	f
+del_vmname	./filecenter.c	/^int del_vmname(char *vmname)$/;"	f
+find_socket	./filecenter.c	/^int find_socket(LIST *list,char *name)$/;"	f
+get_private	./filecenter.c	/^int get_private(char *vmname)$/;"	f
+main	./filecenter.c	/^int main(int argc, char** argv)$/;"	f
+mutex_list	./filecenter.c	/^pthread_mutex_t mutex_list;$/;"	v
+n	./filecenter.c	/^    int n;$/;"	m	struct:__anon1	file:
+name	./filecenter.c	/^    char *name;$/;"	m	struct:__anon1	file:
+name_list	./filecenter.c	/^LIST name_list[MAX_THREAD_NUM + 1];$/;"	v
+recv_data	./filecenter.c	/^void recv_data(void *conn_socket)$/;"	f
+send_current_status	./filecenter.c	/^int send_current_status(int conn_socket)\/\/"+vmname1 +vmname2 "$/;"	f
+thread_count	./filecenter.c	/^int thread_count = 0;$/;"	v
+threads	./filecenter.c	/^pthread_t threads[MAX_THREAD_NUM];$/;"	v

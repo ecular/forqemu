@@ -8,6 +8,8 @@
 #include <sys/socket.h>    // for socket
 #include <sys/stat.h>
 #include <pthread.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #define SERVER_PORT 8888
 #define LISTEN_QUEUE_LENGTH 20
@@ -20,8 +22,139 @@ typedef struct{
 }LIST;
 
 int thread_count = 0;
+pthread_mutex_t mutex_list;
 pthread_t threads[MAX_THREAD_NUM];
 LIST name_list[MAX_THREAD_NUM + 1];
+
+int add_vmname(char *vmname,int conn_socket)
+{
+    name_list[name_list[0].n + 1].n=(int)conn_socket;
+    name_list[name_list[0].n + 1].name = (char *)malloc(strlen(vmname)+3);
+    if(name_list[name_list[0].n + 1].name == NULL)
+        return 1;
+    strcpy(name_list[name_list[0].n + 1].name,vmname);
+    name_list[0].n=name_list[0].n+1;
+    //printf("reveice notify:%s ,name =%s\n ",vmname,name_list[name_list[0].n].name);
+    //fflush(stdout);
+    return 0;
+}
+
+int del_vmname(char *vmname)
+{
+    int i = 0,j = 0;
+    for(i = 1;i <= name_list[0].n; i++)
+    {
+        if(strcmp(name_list[i].name,vmname) == 0)
+        {
+            free(name_list[i].name);
+            for(j = i;j < name_list[0].n; j++)
+                name_list[j] = name_list[j+1];
+            name_list[0].n -= 1;
+            return 0;
+        }
+    }
+    return 1;
+}
+
+int broadcast_add(char *vmname)
+{
+    int i, j = 0;
+    char send_data[20]={'+'};
+    strcat(send_data,vmname);
+    strcat(send_data," ");
+    for(i = 1;i < name_list[0].n; i++)
+    {
+        if(write((int)name_list[i].n,send_data,strlen(send_data)) > 0)
+        {
+            printf("broadcast !%s! to %s success!\n",send_data,name_list[i].name);
+        }
+        else
+        {
+            j++;
+            printf("broadcast !%s! to %s failed!\n",send_data,name_list[i].name);
+        }
+    }
+    if(!j)
+        return 0;
+    else
+        return 1;
+}
+
+int broadcast_del(char *vmname)
+{
+    int i,j=0;
+    char send_data[20]={'-'};
+    strcat(send_data,vmname);
+    strcat(send_data," ");
+    for(i = 1;i <= name_list[0].n; i++)
+    {
+        if(write((int)name_list[i].n,send_data,strlen(send_data)) > 0)
+        {
+            printf("broadcast %s to %s success!\n",send_data,name_list[i].name);
+        }
+        else
+        {
+            j++;
+            printf("broadcast %s to %s failed!\n",send_data,name_list[i].name);
+        }
+    }
+    if(!j)
+        return 0;
+    else
+        return 1;
+}
+
+int send_current_status(int conn_socket)//"+vmname1 +vmname2 "
+{
+    int i;
+    char now_status[100]={0};
+    for(i = 1;i < name_list[0].n; i++)
+    {
+        strcat(now_status,"+");
+        strcat(now_status,name_list[i].name);
+        strcat(now_status," ");
+    }
+    write(conn_socket,now_status,strlen(now_status));
+    printf("send now_status:!%s! to %s\n",now_status,name_list[i].name);
+    fflush(stdout);
+}
+
+//int mysystem(const char *cmdstring, char *buf, int len)
+//{
+//    int   fd[2];
+//    pid_t pid;
+//    int   n, count;
+//    memset(buf, 0, len);
+//    if(pipe(fd) < 0)
+//        return -1;
+//    if((pid = fork()) < 0)
+//        return -1;
+//    else if(pid > 0)      /* parent process */
+//    {
+//        close(fd[1]);     /* close write end */
+//        count = 0;
+//        while((n = read(fd[0], buf + count, len)) > 0 && count > len)
+//            count += n;
+//        close(fd[0]);
+//        if(waitpid(pid, NULL, 0) > 0)
+//            return -1;
+//    }
+//    else                  /* child process */
+//    {
+//        close(fd[0]);     /* close read end */
+//        if(fd[1] != STDOUT_FILENO)
+//        {
+//            if(dup2(fd[1], STDOUT_FILENO) != STDOUT_FILENO)
+//            {
+//                return -1;
+//            }
+//            close(fd[1]);
+//        }
+//        if(execl("/bin/sh", "sh", "-c", cmdstring, (char*)0) == -1)
+//            return -1;
+//    }
+//    return 0;
+//}
 
 int find_socket(LIST *list,char *name)
 {
@@ -47,6 +180,8 @@ void recv_data(void *conn_socket);
  * */
 int get_private(char *vmname)
 {
+    if(vmname == NULL)
+        return 0;
     char *content;
     char result[10];
     int i;
@@ -82,6 +217,7 @@ int get_private(char *vmname)
 int main(int argc, char** argv)
 {
     name_list[0].n=0;
+    pthread_mutex_init(&mutex_list,NULL);
     // ½¨Á¢Socket
     int server_socket = socket(PF_INET, SOCK_STREAM, 0);
     if (server_socket < 0) {
@@ -150,26 +286,51 @@ void recv_data(void *conn_socket)
     char buffer[BUFFER_SIZE];
     bzero(buffer, BUFFER_SIZE);
     char cmd1[200]={0},cmd2[200]={0};
-    char vmname_from[20]={0},vmname_to[20]={0};
+    char vmname_from[20]={0},vmname_to[20]={0},local_vmname[20]={0};
 
     int length = 0;
     while((length = recv((int)conn_socket, buffer, BUFFER_SIZE, 0)) >= 0)
     {
         if (length == 0)
         {
-            printf("Thread Exit\n");
-            return;
+            pthread_mutex_lock(&mutex_list);//P
+            if(del_vmname(local_vmname) == 0)
+            {
+                printf("delete success and Thread Exit\n");
+                printf("broadcast del result:%d\n",broadcast_del(local_vmname));
+                pthread_mutex_unlock(&mutex_list);//V
+                fflush(stdout);
+                return;
+            }
+            else
+            {
+                pthread_mutex_unlock(&mutex_list);//V
+                printf("delete failed Thread Exit! and no broadcast..!!!!\n");
+                fflush(stdout);
+                return;
+            }
         }
 
         if(buffer[0] == '*' && buffer[1] == '#')//*# vmaname
         {
-            
-            name_list[name_list[0].n + 1].n=(int)conn_socket;
-            name_list[name_list[0].n + 1].name = (char *)malloc(strlen(buffer));
-            strcpy(name_list[name_list[0].n + 1].name,buffer+3);
-            name_list[0].n=name_list[0].n+1;
-            printf("reveice notify:%s ,name =%s\n ",buffer,name_list[name_list[0].n].name);
-            fflush(stdout);
+            // name_list[name_list[0].n + 1].n=(int)conn_socket;
+            // name_list[name_list[0].n + 1].name = (char *)malloc(strlen(buffer));
+            // strcpy(name_list[name_list[0].n + 1].name,buffer+3);
+            // name_list[0].n=name_list[0].n+1;
+            // printf("reveice notify:%s ,name =%s\n ",buffer,name_list[name_list[0].n].name);
+            // fflush(stdout);
+            strcpy(local_vmname,buffer+3);
+            pthread_mutex_lock(&mutex_list);//P
+            if(!add_vmname(local_vmname,(int)conn_socket))
+            {
+                send_current_status((int)conn_socket);//send "+vmname1 +vmname2 "
+                printf("broadcast add result:%d\n",broadcast_add(local_vmname));
+                pthread_mutex_unlock(&mutex_list);//V
+                printf("%s add success!\n",local_vmname);
+                fflush(stdout);
+            }
+            else
+                pthread_mutex_unlock(&mutex_list);//V
         }
 
         if(strstr(buffer,"applay") != NULL)
